@@ -2,7 +2,9 @@
 Information extraction module using LLM.
 """
 
+import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -45,6 +47,28 @@ class InformationExtractor:
         
         self.model = model
         self.client = OpenAI(api_key=self.api_key)
+    
+    def _parse_json_response(self, raw_response: str) -> Dict[str, Any]:
+        """
+        Parse JSON from LLM response, handling markdown-wrapped JSON.
+        
+        Args:
+            raw_response: The raw response string from the LLM.
+        
+        Returns:
+            Parsed JSON as a dictionary.
+        
+        Raises:
+            json.JSONDecodeError: If JSON cannot be parsed.
+        """
+        try:
+            return json.loads(raw_response)
+        except json.JSONDecodeError:
+            # Try to extract JSON from the response if it's wrapped in markdown
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(1))
+            raise
     
     def extract(
         self,
@@ -97,21 +121,14 @@ class InformationExtractor:
             raw_response = response.choices[0].message.content
             
             # Parse the response
-            import json
             try:
-                data = json.loads(raw_response)
+                data = self._parse_json_response(raw_response)
             except json.JSONDecodeError:
-                # Try to extract JSON from the response if it's wrapped in markdown
-                import re
-                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_response, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group(1))
-                else:
-                    return ExtractionResult(
-                        success=False,
-                        error="Failed to parse JSON from LLM response",
-                        raw_response=raw_response
-                    )
+                return ExtractionResult(
+                    success=False,
+                    error="Failed to parse JSON from LLM response",
+                    raw_response=raw_response
+                )
             
             return ExtractionResult(
                 success=True,
@@ -220,21 +237,14 @@ class InformationExtractor:
             raw_response = response.choices[0].message.content
             
             # Parse the response
-            import json
             try:
-                data = json.loads(raw_response)
+                data = self._parse_json_response(raw_response)
             except json.JSONDecodeError:
-                # Try to extract JSON from the response if it's wrapped in markdown
-                import re
-                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_response, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group(1))
-                else:
-                    return ExtractionResult(
-                        success=False,
-                        error="Failed to parse JSON from LLM response",
-                        raw_response=raw_response
-                    )
+                return ExtractionResult(
+                    success=False,
+                    error="Failed to parse JSON from LLM response",
+                    raw_response=raw_response
+                )
             
             return ExtractionResult(
                 success=True,
