@@ -26,7 +26,9 @@ source venv/bin/activate  # No Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure as variáveis de ambiente:
+4. Configure as variáveis de ambiente ou Streamlit Secrets:
+
+**Opção A - Para uso local (arquivo .env):**
 ```bash
 # Copie o arquivo env.example para .env
 cp env.example .env
@@ -34,6 +36,19 @@ cp env.example .env
 copy env.example .env
 # Edite o arquivo .env com suas chaves de API e configurações
 ```
+
+**Opção B - Para Streamlit Cloud (secrets.toml):**
+```bash
+# Copie o arquivo de exemplo
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+# Edite .streamlit/secrets.toml com suas chaves de API
+```
+
+**No Streamlit Cloud:**
+1. Acesse seu app no Streamlit Cloud
+2. Vá em "Settings" → "Secrets"
+3. Cole o conteúdo do arquivo `secrets.toml.example` e preencha com seus valores
+4. Salve as alterações
 
 ## 🎯 Uso
 
