@@ -105,21 +105,28 @@ Configure as seguintes variáveis no arquivo `.env`:
 
 ### LLM Providers Suportados
 
-- OpenAI (GPT-3.5, GPT-4)
-- Anthropic (Claude)
-- Ollama (modelos locais)
-- AWS Bedrock
+- **OpenAI**: GPT-4o (versões mais recentes de 2024), GPT-4 Turbo, GPT-4, GPT-3.5 Turbo
+  - Preparado para GPT-5 quando disponível
+  - Modelos mais recentes: `gpt-4o-2024-11-20`, `gpt-4o-mini-2024-07-18`
+- **Anthropic**: Claude 3.5 Sonnet (versões mais recentes), Claude 3 Opus, Claude 3 Haiku
+  - Modelos mais recentes: `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
+- **Ollama**: Modelos locais
+- **AWS Bedrock**: Modelos da AWS
 
 ## 🧩 Funcionalidades
 
 - ✅ Upload múltiplo de arquivos
 - ✅ Leitura de caminhos locais e de rede
 - ✅ Integração com S3 e Azure Blob Storage
+- ✅ **Salvamento automático** em diretório local, rede, S3 ou Azure Blob Storage
+- ✅ **Download de arquivos processados** em múltiplos formatos
 - ✅ Extração de texto de múltiplos formatos
-- ✅ Processamento com LLMs (opcional)
+- ✅ Processamento com LLMs (opcional) usando modelos mais recentes
+- ✅ **Suporte para GPT-4o e Claude 3.5** (versões mais recentes)
+- ✅ Preparado para GPT-5 quando disponível
 - ✅ **Prompts personalizados para extração de informações**
 - ✅ Prompts pré-definidos para casos de uso comuns
-- ✅ Exportação em múltiplos formatos
+- ✅ Exportação em múltiplos formatos (JSON, XML, CSV, TXT)
 - ✅ Cache para melhor performance
 - ✅ Logging estruturado
 - ✅ Interface intuitiva com Streamlit
