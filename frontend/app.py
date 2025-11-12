@@ -11,6 +11,7 @@ import structlog
 from config import get_settings
 from modules.file_ingestion import FileIngestionService, FileSource
 from modules.file_processing import FileProcessingService
+from modules.file_storage import FileStorageService, StorageDestination
 from modules.llm_manager import LLMManager
 from modules.output_formatter import OutputFormatterService
 from modules.prompt_manager import PromptManager
@@ -41,7 +42,83 @@ def get_services():
         "processing": FileProcessingService(),
         "formatter": OutputFormatterService(),
         "llm_manager": LLMManager(),
+        "storage": FileStorageService(),
     }
+
+
+async def auto_save_processed_file(
+    processed_doc,
+    output_format: str,
+    services: dict,
+    auto_save: bool,
+    save_destination: Optional[str],
+    save_path: Optional[str],
+    save_bucket: Optional[str],
+    save_object_key: Optional[str],
+    save_container: Optional[str],
+    save_blob: Optional[str],
+) -> Optional[str]:
+    """
+    Salva automaticamente um arquivo processado no destino configurado.
+    
+    Returns:
+        Mensagem de sucesso ou None se não houver salvamento
+    """
+    if not auto_save or not save_destination:
+        return None
+    
+    try:
+        formatted_output = services["formatter"].format_output(
+            processed_doc, output_format.lower()
+        )
+        output_file_name = f"{processed_doc.file_name}_{output_format.lower()}.{output_format.lower()}"
+        
+        if save_destination == "Local":
+            saved_path = await services["storage"].save_file(
+                content=formatted_output,
+                file_name=output_file_name,
+                destination=StorageDestination.LOCAL,
+                destination_path=save_path,
+            )
+            return f"💾 Arquivo salvo automaticamente em: {saved_path}"
+        
+        elif save_destination == "Diretório de Rede":
+            saved_path = await services["storage"].save_file(
+                content=formatted_output,
+                file_name=output_file_name,
+                destination=StorageDestination.NETWORK_PATH,
+                destination_path=save_path,
+            )
+            return f"💾 Arquivo salvo automaticamente em: {saved_path}"
+        
+        elif save_destination == "S3":
+            if save_bucket and save_object_key:
+                final_object_key = save_object_key if save_object_key.endswith(output_file_name) else f"{save_object_key}/{output_file_name}"
+                saved_uri = await services["storage"].save_file(
+                    content=formatted_output,
+                    file_name=output_file_name,
+                    destination=StorageDestination.S3,
+                    bucket_name=save_bucket,
+                    object_key=final_object_key,
+                )
+                return f"💾 Arquivo salvo automaticamente no S3: {saved_uri}"
+        
+        elif save_destination == "Azure Blob Storage":
+            if save_container and save_blob:
+                final_blob_name = save_blob if save_blob.endswith(output_file_name) else f"{save_blob}/{output_file_name}"
+                saved_uri = await services["storage"].save_file(
+                    content=formatted_output,
+                    file_name=output_file_name,
+                    destination=StorageDestination.AZURE,
+                    container_name=save_container,
+                    blob_name=final_blob_name,
+                )
+                return f"💾 Arquivo salvo automaticamente no Azure: {saved_uri}"
+        
+        return None
+    except Exception as save_error:
+        logger.error("Erro no salvamento automático", error=str(save_error))
+        return f"⚠️ Arquivo processado, mas erro ao salvar automaticamente: {save_error}"
 
 
 def main():
@@ -130,6 +207,55 @@ def main():
         )
 
         st.divider()
+        st.markdown("### 💾 Salvamento Automático")
+        auto_save = st.checkbox("Salvar arquivos processados automaticamente", value=False)
+        save_destination = None
+        save_path = None
+        save_bucket = None
+        save_object_key = None
+        save_container = None
+        save_blob = None
+
+        if auto_save:
+            save_destination = st.selectbox(
+                "Destino de Salvamento",
+                options=["Local", "Diretório de Rede", "S3", "Azure Blob Storage"],
+            )
+
+            if save_destination == "Local":
+                save_path = st.text_input(
+                    "Caminho Local",
+                    value=settings.default_output_path,
+                    help="Caminho onde os arquivos serão salvos localmente",
+                )
+            elif save_destination == "Diretório de Rede":
+                save_path = st.text_input(
+                    "Caminho de Rede",
+                    placeholder="\\\\server\\share\\... ou /mnt/network/...",
+                    help="Caminho do diretório de rede onde os arquivos serão salvos",
+                )
+            elif save_destination == "S3":
+                col1, col2 = st.columns(2)
+                with col1:
+                    save_bucket = st.text_input("Nome do Bucket S3")
+                with col2:
+                    save_object_key = st.text_input(
+                        "Chave do Objeto (Object Key)",
+                        placeholder="outputs/arquivo.json",
+                        help="Chave do objeto no S3 (pode incluir prefixo/pasta)",
+                    )
+            elif save_destination == "Azure Blob Storage":
+                col1, col2 = st.columns(2)
+                with col1:
+                    save_container = st.text_input("Nome do Container")
+                with col2:
+                    save_blob = st.text_input(
+                        "Nome do Blob",
+                        placeholder="outputs/arquivo.json",
+                        help="Nome do blob no Azure (pode incluir prefixo/pasta)",
+                    )
+
+        st.divider()
         st.markdown("### 📊 Estatísticas")
         if "stats" in st.session_state:
             st.metric("Arquivos Processados", st.session_state.stats.get("processed", 0))
@@ -196,6 +322,27 @@ def main():
 
                                 processed_documents.append(processed_doc)
                                 st.success(f"✅ {file_name} processado com sucesso!")
+                                
+                                # Salvamento automático se configurado
+                                save_message = asyncio.run(
+                                    auto_save_processed_file(
+                                        processed_doc,
+                                        output_format,
+                                        services,
+                                        auto_save,
+                                        save_destination,
+                                        save_path,
+                                        save_bucket,
+                                        save_object_key,
+                                        save_container,
+                                        save_blob,
+                                    )
+                                )
+                                if save_message:
+                                    if save_message.startswith("⚠️"):
+                                        st.warning(save_message)
+                                    else:
+                                        st.info(save_message)
 
                             except Exception as e:
                                 st.error(f"❌ Erro ao processar {uploaded_file.name}: {e}")
@@ -251,6 +398,28 @@ def main():
 
                             st.session_state.processed_documents = [processed_doc]
                             st.success("✅ Arquivo processado com sucesso!")
+                            
+                            # Salvamento automático se configurado
+                            save_message = asyncio.run(
+                                auto_save_processed_file(
+                                    processed_doc,
+                                    output_format,
+                                    services,
+                                    auto_save,
+                                    save_destination,
+                                    save_path,
+                                    save_bucket,
+                                    save_object_key,
+                                    save_container,
+                                    save_blob,
+                                )
+                            )
+                            if save_message:
+                                if save_message.startswith("⚠️"):
+                                    st.warning(save_message)
+                                else:
+                                    st.info(save_message)
+                            
                             st.rerun()
 
                         except Exception as e:
@@ -294,6 +463,28 @@ def main():
 
                             st.session_state.processed_documents = [processed_doc]
                             st.success("✅ Arquivo processado com sucesso!")
+                            
+                            # Salvamento automático se configurado
+                            save_message = asyncio.run(
+                                auto_save_processed_file(
+                                    processed_doc,
+                                    output_format,
+                                    services,
+                                    auto_save,
+                                    save_destination,
+                                    save_path,
+                                    save_bucket,
+                                    save_object_key,
+                                    save_container,
+                                    save_blob,
+                                )
+                            )
+                            if save_message:
+                                if save_message.startswith("⚠️"):
+                                    st.warning(save_message)
+                                else:
+                                    st.info(save_message)
+                            
                             st.rerun()
 
                         except Exception as e:
@@ -334,6 +525,28 @@ def main():
 
                             st.session_state.processed_documents = [processed_doc]
                             st.success("✅ Arquivo processado com sucesso!")
+                            
+                            # Salvamento automático se configurado
+                            save_message = asyncio.run(
+                                auto_save_processed_file(
+                                    processed_doc,
+                                    output_format,
+                                    services,
+                                    auto_save,
+                                    save_destination,
+                                    save_path,
+                                    save_bucket,
+                                    save_object_key,
+                                    save_container,
+                                    save_blob,
+                                )
+                            )
+                            if save_message:
+                                if save_message.startswith("⚠️"):
+                                    st.warning(save_message)
+                                else:
+                                    st.info(save_message)
+                            
                             st.rerun()
 
                         except Exception as e:
@@ -370,14 +583,122 @@ def main():
                     st.subheader("Conteúdo Formatado")
                     st.code(formatted_output, language=output_format.lower())
 
-                    # Botão de download
-                    st.download_button(
-                        label=f"⬇️ Baixar {output_format}",
-                        data=formatted_output,
-                        file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
-                        mime=f"application/{output_format.lower()}",
-                        key=f"download_{idx}",
-                    )
+                    # Botões de download e salvamento
+                    col_download, col_save = st.columns(2)
+                    
+                    with col_download:
+                        st.download_button(
+                            label=f"⬇️ Baixar {output_format}",
+                            data=formatted_output,
+                            file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                            mime=f"application/{output_format.lower()}",
+                            key=f"download_{idx}",
+                        )
+                    
+                    with col_save:
+                        # Opções de salvamento manual
+                        with st.expander("💾 Salvar em...", expanded=False):
+                            manual_save_dest = st.selectbox(
+                                "Destino",
+                                options=["Local", "Diretório de Rede", "S3", "Azure Blob Storage"],
+                                key=f"manual_save_dest_{idx}",
+                            )
+                            
+                            if manual_save_dest == "Local":
+                                manual_path = st.text_input(
+                                    "Caminho",
+                                    value=settings.default_output_path,
+                                    key=f"manual_path_local_{idx}",
+                                )
+                                if st.button("💾 Salvar", key=f"save_local_{idx}"):
+                                    try:
+                                        saved_path = asyncio.run(
+                                            services["storage"].save_file(
+                                                content=formatted_output,
+                                                file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                                destination=StorageDestination.LOCAL,
+                                                destination_path=manual_path,
+                                            )
+                                        )
+                                        st.success(f"✅ Arquivo salvo em: {saved_path}")
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao salvar: {e}")
+                            
+                            elif manual_save_dest == "Diretório de Rede":
+                                manual_network_path = st.text_input(
+                                    "Caminho de Rede",
+                                    placeholder="\\\\server\\share\\...",
+                                    key=f"manual_path_network_{idx}",
+                                )
+                                if st.button("💾 Salvar", key=f"save_network_{idx}"):
+                                    try:
+                                        saved_path = asyncio.run(
+                                            services["storage"].save_file(
+                                                content=formatted_output,
+                                                file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                                destination=StorageDestination.NETWORK_PATH,
+                                                destination_path=manual_network_path,
+                                            )
+                                        )
+                                        st.success(f"✅ Arquivo salvo em: {saved_path}")
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao salvar: {e}")
+                            
+                            elif manual_save_dest == "S3":
+                                col_s3_1, col_s3_2 = st.columns(2)
+                                with col_s3_1:
+                                    manual_bucket = st.text_input(
+                                        "Bucket",
+                                        key=f"manual_bucket_{idx}",
+                                    )
+                                with col_s3_2:
+                                    manual_key = st.text_input(
+                                        "Object Key",
+                                        value=f"outputs/{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                        key=f"manual_key_{idx}",
+                                    )
+                                if st.button("💾 Salvar", key=f"save_s3_{idx}"):
+                                    try:
+                                        saved_uri = asyncio.run(
+                                            services["storage"].save_file(
+                                                content=formatted_output,
+                                                file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                                destination=StorageDestination.S3,
+                                                bucket_name=manual_bucket,
+                                                object_key=manual_key,
+                                            )
+                                        )
+                                        st.success(f"✅ Arquivo salvo em: {saved_uri}")
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao salvar: {e}")
+                            
+                            elif manual_save_dest == "Azure Blob Storage":
+                                col_az_1, col_az_2 = st.columns(2)
+                                with col_az_1:
+                                    manual_container = st.text_input(
+                                        "Container",
+                                        key=f"manual_container_{idx}",
+                                    )
+                                with col_az_2:
+                                    manual_blob = st.text_input(
+                                        "Blob Name",
+                                        value=f"outputs/{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                        key=f"manual_blob_{idx}",
+                                    )
+                                if st.button("💾 Salvar", key=f"save_azure_{idx}"):
+                                    try:
+                                        saved_uri = asyncio.run(
+                                            services["storage"].save_file(
+                                                content=formatted_output,
+                                                file_name=f"{doc.file_name}_{output_format.lower()}.{output_format.lower()}",
+                                                destination=StorageDestination.AZURE,
+                                                container_name=manual_container,
+                                                blob_name=manual_blob,
+                                            )
+                                        )
+                                        st.success(f"✅ Arquivo salvo em: {saved_uri}")
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao salvar: {e}")
 
                     # Análise LLM se disponível
                     if "llm_analysis" in doc.metadata:

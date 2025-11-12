@@ -21,7 +21,7 @@ class OpenAIProvider(BaseLLMProvider):
     async def generate_response(
         self,
         prompt: str,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o-2024-11-20",
         max_tokens: Optional[int] = None,
         **kwargs,
     ) -> str:
@@ -30,7 +30,7 @@ class OpenAIProvider(BaseLLMProvider):
 
         Args:
             prompt: Texto de entrada
-            model: Nome do modelo (padrão: gpt-3.5-turbo)
+            model: Nome do modelo (padrão: gpt-4o-2024-11-20 - versão mais recente)
             max_tokens: Número máximo de tokens
             **kwargs: Argumentos adicionais
 
@@ -70,11 +70,29 @@ class OpenAIProvider(BaseLLMProvider):
             raise ValueError(f"Erro ao chamar OpenAI: {e}")
 
     def get_available_models(self) -> list[str]:
-        """Retorna lista de modelos OpenAI disponíveis."""
+        """Retorna lista de modelos OpenAI disponíveis (ordenados do mais recente para o mais antigo)."""
         return [
-            "gpt-4",
+            # Modelos GPT-5 (quando disponíveis - preparado para futuro)
+            "gpt-5",
+            "gpt-5-turbo",
+            "gpt-5-mini",
+            # Modelos GPT-4o (versões mais recentes - 2024)
+            "gpt-4o-2024-11-20",  # Versão mais recente do GPT-4o (novembro 2024)
+            "gpt-4o-2024-08-06",  # Versão anterior do GPT-4o
+            "gpt-4o",  # Alias para versão mais recente
+            "gpt-4o-mini-2024-07-18",  # Versão mais recente do GPT-4o-mini
+            "gpt-4o-mini",  # Alias para versão mais recente
+            # Modelos GPT-4 Turbo
+            "gpt-4-turbo-2024-04-09",  # Versão mais recente do GPT-4 Turbo
             "gpt-4-turbo-preview",
-            "gpt-3.5-turbo",
+            "gpt-4-turbo",
+            # Modelos GPT-4 (versões anteriores)
+            "gpt-4-0613",
+            "gpt-4-32k",
+            "gpt-4",
+            # Modelos GPT-3.5 (compatibilidade)
+            "gpt-3.5-turbo-0125",  # Versão mais recente do GPT-3.5
             "gpt-3.5-turbo-16k",
+            "gpt-3.5-turbo",
         ]
 

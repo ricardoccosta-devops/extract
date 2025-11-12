@@ -21,7 +21,7 @@ class AnthropicProvider(BaseLLMProvider):
     async def generate_response(
         self,
         prompt: str,
-        model: str = "claude-3-opus-20240229",
+        model: str = "claude-3-5-sonnet-20241022",
         max_tokens: Optional[int] = 4096,
         **kwargs,
     ) -> str:
@@ -30,7 +30,7 @@ class AnthropicProvider(BaseLLMProvider):
 
         Args:
             prompt: Texto de entrada
-            model: Nome do modelo (padrão: claude-3-opus-20240229)
+            model: Nome do modelo (padrão: claude-3-5-sonnet-20241022 - versão mais recente)
             max_tokens: Número máximo de tokens
             **kwargs: Argumentos adicionais
 
@@ -69,8 +69,16 @@ class AnthropicProvider(BaseLLMProvider):
             raise ValueError(f"Erro ao chamar Anthropic: {e}")
 
     def get_available_models(self) -> list[str]:
-        """Retorna lista de modelos Anthropic disponíveis."""
+        """Retorna lista de modelos Anthropic disponíveis (ordenados do mais recente para o mais antigo)."""
         return [
+            # Claude 3.5 (versões mais recentes - 2024)
+            "claude-3-5-sonnet-20241022",  # Versão mais recente do Claude 3.5 Sonnet (outubro 2024)
+            "claude-3-5-sonnet-20240620",  # Versão anterior do Claude 3.5 Sonnet
+            "claude-3-5-sonnet",  # Alias para versão mais recente
+            "claude-3-5-haiku-20241022",  # Versão mais recente do Claude 3.5 Haiku
+            "claude-3-5-haiku-20240620",  # Versão anterior do Claude 3.5 Haiku
+            "claude-3-5-haiku",  # Alias para versão mais recente
+            # Claude 3 (versões anteriores)
             "claude-3-opus-20240229",
             "claude-3-sonnet-20240229",
             "claude-3-haiku-20240307",
